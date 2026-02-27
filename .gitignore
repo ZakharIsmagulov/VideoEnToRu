@@ -2,3 +2,6 @@
 /frontend/
 /.venv/
 /backend/app/.env
+*.mp4
+*.wav
+/backend/app/Translation/models/whisper_medium/medium.en.pt
