@@ -1,0 +1,4 @@
+/test_main.http
+/frontend/
+/.venv/
+/backend/app/.env
