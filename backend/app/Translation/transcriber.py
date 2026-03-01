@@ -1,8 +1,10 @@
 import logging
 from .TranslationException import PathNotExist, TranscriptionError
-import whisper
+import whisperx
 from pathlib import Path
 from typing import List, Dict
+import gc
+import torch
 
 
 def transcribe_audio(audio_path: Path, model_path: Path,
@@ -12,7 +14,7 @@ def transcribe_audio(audio_path: Path, model_path: Path,
 
     :param audio_path: Path to the audio file.
     :param model_path: Path to the Whisper model to use.
-    :param logger_name: Name of the logger to use for logging.
+    :param logger_name: Name of the logger.
     :return: A list of segments with text and timestamps.
     """
     logger = logging.getLogger(logger_name)
@@ -20,14 +22,21 @@ def transcribe_audio(audio_path: Path, model_path: Path,
         raise PathNotExist(f"Error: Audio file not found at {str(audio_path)}")
 
     try:
-        logger.info(f"Loading Whisper model '{model_path}'...")
-        model = whisper.load_model(str(model_path.absolute()), device="cuda")
-        
-        logger.info(f"Starting transcription for {str(audio_path)}...")
-        # The `word_timestamps=True` option can be very useful for more granular control later.
-        # For now, we'll stick to segment-level timestamps which is the default.
-        result = model.transcribe(str(audio_path.absolute()), verbose=False)
-        logger.info("Transcription completed successfully.")
+        logger.info(f"Loading Whisper model '{str(model_path)}'")
+        device = "cuda"
+        model = whisperx.load_model(str(model_path.absolute()), device, compute_type="float16", language="en")
+        logger.info(f"Whisper model '{str(model_path)}' was loaded")
+
+        logger.info(f"Starting transcription for {str(audio_path)}")
+        audio = whisperx.load_audio(str(audio_path))
+        result = model.transcribe(audio, batch_size=8, verbose=False)
+        gc.collect()
+        torch.cuda.empty_cache()
+        del model
+        logger.info("Text segments were made successfully")
+
+        # TODO: 1. Add male/female alignment to the segments
+        # TODO: 2. Add diarization with
 
         # Each segment is a dictionary with 'start', 'end', and 'text'.
         return result['segments']

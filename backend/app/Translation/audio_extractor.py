@@ -11,7 +11,7 @@ def extract_audio(video_path: Path, temp_dir: Path,
 
     :param video_path: Path to the input video file.
     :param temp_dir: Directory to save the temporary audio file.
-    :param logger_name: Name of the logger to use for logging.
+    :param logger_name: Name of the logger.
     :return: Path to the extracted audio file.
     """
     logger = logging.getLogger(logger_name)
@@ -19,7 +19,7 @@ def extract_audio(video_path: Path, temp_dir: Path,
         raise PathNotExist(f"Error: Video file not found at {str(video_path)}")
 
     try:
-        logger.info(f"Starting audio extraction from {str(video_path)}...")
+        logger.info(f"Starting audio extraction from {str(video_path)}")
 
         temp_dir.mkdir(parents=True, exist_ok=True)
 

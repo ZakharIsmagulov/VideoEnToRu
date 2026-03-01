@@ -5,6 +5,7 @@ from .TranslationConfig import TranslationConfig
 from .TranslationException import *
 from .audio_extractor import extract_audio
 from .transcriber import transcribe_audio
+from .translator import translate_segments
 from pathlib import Path
 from typing import List, Dict, Literal
 
@@ -48,6 +49,11 @@ class VideoTranslator:
     def __init__(self, config: TranslationConfig):
         self.config = config
         self.logger: logging.Logger = logging.getLogger(config.logger_name)
+        self.logger.setLevel(logging.INFO)
+        file_handler = logging.FileHandler(str(config.logger_path.absolute()), mode='a', encoding='utf-8')
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
         self.logger.info("Translator initialized")
         self.audio_path: Path | None = None
         self.transcription: List[Dict] | None = None
@@ -107,9 +113,20 @@ class VideoTranslator:
     @retry(3, 10, "error")
     def translate_segments(self):
         """
-        Translate segments from self.transcription. Saves TODO
+        Translate segments from self.transcription. Saves List of Dict with segments in self.translation
         """
-        pass
+        if self.transcription is None:
+            raise ValueError("There is no transcription defined")
+
+        self.translation = translate_segments(segments=self.transcription,
+                                              model_path=self.config.translator_model_path,
+                                              prompts_path=self.config.prompts_path,
+                                              video_theme=self.config.video_theme,
+                                              logger_name=self.config.logger_name)
+
+        self.status = "translated"
+
+        self.logger.info("Translated segments")
 
     @retry(3, 10, "error")
     def tts(self):
