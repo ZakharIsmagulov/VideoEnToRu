@@ -7,3 +7,6 @@
 /backend/app/Translation/models/whisper_medium/medium.en.pt
 /backend/app/Translation/models/qwen/
 /backend/app/Translation/models/whisper/
+/backend/app/Translation/temp/temp_transcription.json
+/backend/app/Translation/models/mistral/
+/backend/app/Translation/models/nllb/

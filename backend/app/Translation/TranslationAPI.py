@@ -55,7 +55,7 @@ class VideoTranslator:
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
         self.logger.info("Translator initialized")
-        self.audio_path: Path | None = None
+        self.audio_name: str | None = None
         self.transcription: List[Dict] | None = None
         self.translation = None # TODO: Define type of the variable
         self.tts_path: Path | None = None
@@ -72,7 +72,7 @@ class VideoTranslator:
         for item in self.config.temp_dir.iterdir():
             if item.is_file():
                 item.unlink()
-        self.audio_path = None
+        self.audio_name = None
         self.transcription = None
         self.translation = None
         self.tts_path = None
@@ -87,7 +87,7 @@ class VideoTranslator:
         :param video_name: Name of the video file with extension.
         """
         video_path = self.config.abs_data_path / Path("uploads") / video_name
-        self.audio_path = extract_audio(video_path=video_path,
+        self.audio_name = extract_audio(video_path=video_path,
                                         temp_dir=self.config.temp_dir,
                                         logger_name=self.config.logger_name)
         self.status = "extracted"
@@ -100,10 +100,8 @@ class VideoTranslator:
         """
         Transcribe audio from self.audio_path. Saves List of Dict with segments in self.transcription
         """
-        if self.audio_path is None:
-            raise PathNotExist("There is no audio_path defined")
-
-        self.transcription = transcribe_audio(audio_path=self.audio_path,
+        self.transcription = transcribe_audio(temp_dir=self.config.temp_dir,
+                                              audio_name=self.audio_name,
                                               model_path=self.config.transcriber_model_path,
                                               logger_name=self.config.logger_name)
         self.status = "transcribed"

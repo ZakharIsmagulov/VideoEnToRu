@@ -1,3 +1,4 @@
+import json
 import logging
 from .TranslationException import PathNotExist, TranscriptionError
 import whisperx
@@ -7,17 +8,20 @@ import gc
 import torch
 
 
-def transcribe_audio(audio_path: Path, model_path: Path,
+def transcribe_audio(temp_dir: Path, audio_name: str, model_path: Path,
                      logger_name: str) -> List[Dict]:
     """
     Transcribes an audio file using OpenAI Whisper model.
 
-    :param audio_path: Path to the audio file.
+    :param temp_dir: Path to the temp folder.
+    :param audio_name: Name of the audiofile in temp_path to transcribe.
     :param model_path: Path to the Whisper model to use.
     :param logger_name: Name of the logger.
     :return: A list of segments with text and timestamps.
     """
     logger = logging.getLogger(logger_name)
+
+    audio_path = temp_dir / audio_name
     if not audio_path.exists():
         raise PathNotExist(f"Error: Audio file not found at {str(audio_path)}")
 
@@ -39,7 +43,11 @@ def transcribe_audio(audio_path: Path, model_path: Path,
         # TODO: 2. Add diarization with
 
         # Each segment is a dictionary with 'start', 'end', and 'text'.
-        return result['segments']
+        save_path = temp_dir / "temp_transcription.json"
+        logger.info(f"Saving transcription to {str(save_path)}")
+        save_path.write_text(json.dumps(result["segments"], ensure_ascii=False, indent=2))
+        logger.info(f"Transcription is saved to {str(save_path)}")
+        return result["segments"]
 
     except Exception as e:
         raise TranscriptionError(f"An error occurred during transcription: {str(e)}")

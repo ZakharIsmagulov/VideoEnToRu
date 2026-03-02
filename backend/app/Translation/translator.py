@@ -1,6 +1,8 @@
 import logging
+from .TranslationModel import TranslationModel
+from .FormattingModel import FormattingModel
 from llama_cpp import Llama
-from typing import List, Dict
+from typing import List, Dict, Any
 from pathlib import Path
 import math
 import json
@@ -83,7 +85,84 @@ def parse_result(json_string: str, batch: List[Dict[str, Dict]], segments: List[
     return results
 
 
-def translate_segments(segments: List[Dict], model_path: Path, prompts_path: Path, video_theme: str,
+def count_max_chars(orig_text: str, start: float, end: float) -> int:
+    return max(len(orig_text), 15 * math.ceil((end - start)))
+
+
+def translate_segments(segments: List[Dict[str, Any]], model_path: Path, prompts_path: Path,
+                       logger_name: str) -> List[Dict[str, Any]]:
+    logger = logging.getLogger(logger_name)
+
+    logger.info(f"Loading translation model {str(model_path)}")
+    model = TranslationModel(str(model_path.absolute()))
+    logger.info(f"Translation model {str(model_path)} was loaded")
+
+    sys_prompt_t = (prompts_path / "translator_system").read_text(encoding="utf-8")
+    sys_prompt = get_prompt(sys_prompt_t)
+    user_prompt_t = (prompts_path / "translator_user").read_text(encoding="utf-8")
+
+    logger.info(f"Starting translation of {len(segments)} segments")
+    translated_segs = []
+    for i, segment in enumerate(segments):
+        translated_segs.append({"start": segment["start"],
+                                "end": segment["end"],
+                                "original": segment["text"]})
+        max_char = count_max_chars(segment["text"], segment["start"], segment["end"])
+        user_prompt = get_prompt(user_prompt_t, text=segment["text"], max_char=max_char)
+
+        output = model.generate_output(sys_prompt, user_prompt)
+
+        translated_segs[-1]["translated"] = output
+
+        if i % 10 == 0:
+            logger.info(f"Translated {i}/{len(segments)} segments")
+
+    return translated_segs
+
+
+def format_segments(segments: List[Dict[str, Any]], model_path: Path, prompts_path: Path,
+                    logger_name: str) -> List[Dict[str, Any]]:
+    logger = logging.getLogger(logger_name)
+
+    logger.info(f"Loading formatting model {str(model_path)}")
+    model = FormattingModel(str(model_path.absolute()))
+    logger.info(f"Formatting model {str(model_path)} was loaded")
+
+    sys_prompt_t = (prompts_path / "formatting_system").read_text(encoding="utf-8")
+    sys_prompt = get_prompt(sys_prompt_t) # TODO
+    user_prompt_t = (prompts_path / "formatting_user").read_text(encoding="utf-8")
+
+    batch_size = 10
+    inter_size = 4
+    logger.info(f"Starting formatting of {len(segments)} segments")
+    cur_idx = 0
+    batch = segments[cur_idx:batch_size]
+    while len(batch) > 0:
+        user_load = [{"phrase_id": i,
+                      "original": seg["original"],
+                      "translated": seg["translated"],
+                      "max_chars": count_max_chars(seg["original"], seg["start"], seg["end"])}
+                     for i, seg in enumerate(batch)]
+        user_prompt = get_prompt(user_prompt_t, user_load=json.dumps(user_load, ensure_ascii=False, indent=2)) # TODO
+
+        output = model.generate_output(sys_prompt, user_prompt)
+
+        for dct in output:
+            idx = dct["phrase_id"]
+            batch[idx]["translated"] = dct["translated"]
+
+
+        if cur_idx + batch_size >= len(segments):
+            break
+        cur_idx = cur_idx + batch_size - inter_size
+        if cur_idx + batch_size > len(segments):
+            cur_idx = len(segments) - batch_size
+        batch = segments[cur_idx:cur_idx + batch_size]
+
+    return segments
+
+
+def translate_pipeline(segments: List[Dict], model_path: Path, prompts_path: Path, video_theme: str,
                        logger_name: str) -> List[Dict]:
     """
     Translates the 'text' field of each segment from English to Russian.

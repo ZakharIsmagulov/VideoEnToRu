@@ -5,7 +5,7 @@ from moviepy import VideoFileClip
 
 
 def extract_audio(video_path: Path, temp_dir: Path,
-                  logger_name: str) -> Path:
+                  logger_name: str) -> str:
     """
     Extracts audio from a video file and saves it as a WAV file.
 
@@ -39,7 +39,7 @@ def extract_audio(video_path: Path, temp_dir: Path,
         )
         video_clip.close()
         logger.info(f"Audio extracted successfully to {str(audio_path)}")
-        return audio_path
+        return audio_basename
         
     except Exception as e:
         # Clean up a potentially partially created audio file
