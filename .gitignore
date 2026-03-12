@@ -10,3 +10,7 @@
 /backend/app/Translation/temp/temp_transcription.json
 /backend/app/Translation/models/mistral/
 /backend/app/Translation/models/nllb/
+/backend/app/logs/transcription_logger.log
+/backend/app.db
+/backend/alembic/versions/74cda79eced5_initial_tables.py
+/backend/alembic/versions/576fc61e7d57_initial_tables.py

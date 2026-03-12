@@ -1,11 +1,10 @@
 import json
 import logging
-from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
-from vllm.sampling_params import StructuredOutputsParams
+from llama_cpp import Llama, LlamaGrammar
 import functools
 import time
 from typing import Dict
+from tqdm import tqdm
 
 
 def retry(max_retries: int, delay: int):
@@ -24,7 +23,7 @@ def retry(max_retries: int, delay: int):
                 try:
                     return func(self, *args, **kwargs)
                 except Exception as e:
-                    logger.warning(f"Attempt {i}/{max_retries} failed: {str(e)}")
+                    logger.warning(f"Formatting attempt {i}/{max_retries} failed: {str(e)}")
                     if i == max_retries:
                         raise
                     time.sleep(delay / 1000)
@@ -37,25 +36,12 @@ class FormattingModel:
     def __init__(self, model_path: str, logger_name: str):
         self.logger = logging.getLogger(logger_name)
 
-        self.model = LLM(model=model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-        response_schema = {"type": "array",
-                           "items": {
-                               "type": "object",
-                               "additionalProperties": False,
-                               "properties": {
-                                   "phrase_id": {"type": "integer"},
-                                   "translated": {"type": "string"},
-                               },
-                               "required": ["phrase_id", "translated"],
-                           },
-                           }
-        structured = StructuredOutputsParams(json=response_schema)
-        self.params = SamplingParams(
-            temperature=0.2,
-            max_tokens=512,  # важно дать достаточно токенов, чтобы JSON успел закрыться
-            structured_outputs=structured,
+        self.model = Llama(
+            model_path=model_path,
+            n_ctx=32768,
+            n_gpu_layers=-1,  # если OOM — снизьте до 28/24/20
+            n_batch=512,  # можно 256 если упирается
+            verbose=False
         )
 
     def _get_prompt(self, sys_prompt: str, user_prompt: str):
@@ -63,16 +49,43 @@ class FormattingModel:
                        {"role": "system", "content": sys_prompt},
                        {"role": "user", "content": user_prompt},
                    ]
-        return self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        return messages
 
     @retry(2, 10)
     def generate_output(self, sys_prompt: str, user_prompt: str) -> Dict:
         prompt = self._get_prompt(sys_prompt, user_prompt)
-        out = self.model.generate([prompt], self.params)
-        text = out[0].outputs[0].text
+        print(prompt)
+        stream = self.model.create_chat_completion(
+            messages=prompt,
+            temperature=0.0,
+            stream=True,
+            max_tokens=3000
+        )
+
+        chunks = []
+
+        progress = tqdm(
+            desc="Generating",
+            unit="tok",
+            leave=False,
+        )
+
+        try:
+            for chunk in stream:
+                delta = chunk["choices"][0].get("delta", {})
+                piece = delta.get("content", "")
+                if piece:
+                    chunks.append(piece)
+
+                    # В streaming-режиме обычно приходит примерно по токену/кусочку.
+                    # Это не идеально точный токен-счетчик, но для прогресса подходит.
+                    if progress is not None:
+                        progress.update(1)
+        finally:
+            if progress is not None:
+                progress.close()
+
+        text = "".join(chunks)
+        print(text)
         result = json.loads(text)
         return result

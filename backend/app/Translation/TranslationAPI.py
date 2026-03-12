@@ -5,9 +5,10 @@ from .TranslationConfig import TranslationConfig
 from .TranslationException import *
 from .audio_extractor import extract_audio
 from .transcriber import transcribe_audio
-from .translator import translate_segments
+from .translator import translate_segments, translate_pipeline
 from pathlib import Path
 from typing import List, Dict, Literal
+import json
 
 
 def retry(max_retries: int, delay: int, error_status: str):
@@ -113,11 +114,13 @@ class VideoTranslator:
         """
         Translate segments from self.transcription. Saves List of Dict with segments in self.translation
         """
+        self.transcription = json.loads((self.config.temp_dir / "temp_transcription.json").read_text())
         if self.transcription is None:
             raise ValueError("There is no transcription defined")
 
-        self.translation = translate_segments(segments=self.transcription,
-                                              model_path=self.config.translator_model_path,
+        self.translation = translate_pipeline(segments=self.transcription,
+                                              translator_model_path=self.config.translator_model_path,
+                                              formatter_model_path=self.config.formatter_model_path,
                                               prompts_path=self.config.prompts_path,
                                               video_theme=self.config.video_theme,
                                               logger_name=self.config.logger_name)

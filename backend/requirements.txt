@@ -1,8 +1,16 @@
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.8.0
-torchvision==2.8.0
+torchvision==2.23.0
+torchaudio==2.8.0
+# pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+
+torchcodec
 moviepy
 whisperx
+
+llama-cpp-python
+# CMAKE_ARGS="-DGGML_CUDA=on" FORCE_CMAKE=1 pip install llama-cpp-python
+
 fastapi
 uvicorn
 python-multipart
