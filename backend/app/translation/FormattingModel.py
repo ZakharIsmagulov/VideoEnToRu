@@ -1,6 +1,6 @@
 import json
 import logging
-from llama_cpp import Llama, LlamaGrammar
+from llama_cpp import Llama
 import functools
 import time
 from typing import Dict

@@ -1,6 +1,6 @@
 import json
 import logging
-from .TranslationException import PathNotExist, TranscriptionError
+from app.exceptions.TranslationException import PathNotExist, TranscriptionError
 import whisperx
 from pathlib import Path
 from typing import List, Dict

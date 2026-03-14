@@ -1,14 +1,17 @@
 import logging
 import functools
 import time
-from .TranslationConfig import TranslationConfig
-from .TranslationException import *
-from .audio_extractor import extract_audio
-from .transcriber import transcribe_audio
-from .translator import translate_segments, translate_pipeline
 from pathlib import Path
 from typing import List, Dict, Literal
 import json
+from collections.abc import Callable
+
+from app.translation.TranslationConfig import TranslationConfig as Config
+from app.translation.audio_extractor import extract_audio
+from app.translation.transcriber import transcribe_audio
+from app.translation.translator import translate_pipeline
+
+from app.exceptions.TranslationException import *
 
 
 def retry(max_retries: int, delay: int, error_status: str):
@@ -47,50 +50,68 @@ def retry(max_retries: int, delay: int, error_status: str):
 
 
 class VideoTranslator:
-    def __init__(self, config: TranslationConfig):
-        self.config = config
-        self.logger: logging.Logger = logging.getLogger(config.logger_name)
-        self.logger.setLevel(logging.INFO)
-        file_handler = logging.FileHandler(str(config.logger_path.absolute()), mode='a', encoding='utf-8')
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-        self.logger.info("Translator initialized")
+    def __init__(self, video_name: str, should_stop: Callable[[], bool], video_theme: str = "Разговорное видео"):
+        self.logger: logging.Logger = logging.getLogger(Config.logger_name)
+        self.video_name: str = video_name
+        self.video_id: int = int(Path(video_name).stem)
         self.audio_name: str | None = None
         self.transcription: List[Dict] | None = None
-        self.translation = None # TODO: Define type of the variable
-        self.tts_path: Path | None = None
-        self.res_path: Path | None = None
-        self.status: Literal["free", "extracted", "transcribed", "translated", "done", "error"] = "free"
+        self.translation: List[Dict] | None = None
+        self.tts_name: str | None = None
+        self.res_name: str | None = None
+        self.status: Literal["free", "extracted", "transcribed", "translated", "done", "error", "stopped"] = "free"
+        self._should_stop = should_stop
+
+    def _check_stop(self):
+        if self._should_stop():
+            self.status = "stopped"
+            raise TranslationStopped()
 
     def get_status(self):
         return self.status
 
-    def get_res_path(self):
-        return self.res_path
+    def get_res_name(self):
+        return self.res_name
 
     def clear(self):
-        for item in self.config.temp_dir.iterdir():
-            if item.is_file():
-                item.unlink()
-        self.audio_name = None
-        self.transcription = None
-        self.translation = None
-        self.tts_path = None
-        self.res_path = None
-        self.status = "free"
+        filenames = [
+            self.audio_name,
+            self.tts_name,
+        ]
+        for filename in filenames:
+            file_path = Config.temp_path / filename
+            if file_path.exists():
+                file_path.unlink()
+
+    def run(self):
+        try:
+            self._check_stop()
+            self.extract_audio()
+
+            self._check_stop()
+            self.transcribe_audio()
+
+            self._check_stop()
+            self.translate_segments()
+
+            res_path = (Config.processed_path / Path(f"{self.video_id}.json")).write_text(
+                json.dumps(self.translation, indent=2, ensure_ascii=False))
+
+            return res_path
+        finally:
+            self.clear()
+
+
 
     @retry(3, 10, "error")
-    def extract_audio(self, video_name: str):
+    def extract_audio(self):
         """
         Extract audio from the video by using ffmpeg. Saves result in self.audio_path
-
-        :param video_name: Name of the video file with extension.
         """
-        video_path = self.config.abs_data_path / Path("uploads") / video_name
+        video_path = Config.upload_path / self.video_name
         self.audio_name = extract_audio(video_path=video_path,
-                                        temp_dir=self.config.temp_dir,
-                                        logger_name=self.config.logger_name)
+                                        temp_dir=Config.temp_path,
+                                        logger_name=Config.logger_name)
         self.status = "extracted"
 
         self.logger.info("Extracted audio from video")
@@ -101,10 +122,10 @@ class VideoTranslator:
         """
         Transcribe audio from self.audio_path. Saves List of Dict with segments in self.transcription
         """
-        self.transcription = transcribe_audio(temp_dir=self.config.temp_dir,
+        self.transcription = transcribe_audio(temp_dir=Config.temp_path,
                                               audio_name=self.audio_name,
-                                              model_path=self.config.transcriber_model_path,
-                                              logger_name=self.config.logger_name)
+                                              model_path=Config.transcriber_path,
+                                              logger_name=Config.logger_name)
         self.status = "transcribed"
 
         self.logger.info("Transcribed audio")
@@ -114,16 +135,16 @@ class VideoTranslator:
         """
         Translate segments from self.transcription. Saves List of Dict with segments in self.translation
         """
-        self.transcription = json.loads((self.config.temp_dir / "temp_transcription.json").read_text())
+        self.transcription = json.loads((Config.temp_path / "temp_transcription.json").read_text())
         if self.transcription is None:
             raise ValueError("There is no transcription defined")
 
         self.translation = translate_pipeline(segments=self.transcription,
-                                              translator_model_path=self.config.translator_model_path,
-                                              formatter_model_path=self.config.formatter_model_path,
-                                              prompts_path=self.config.prompts_path,
-                                              video_theme=self.config.video_theme,
-                                              logger_name=self.config.logger_name)
+                                              translator_model_path=Config.translator_path,
+                                              formatter_model_path=Config.formatter_path,
+                                              prompts_path=Config.prompts_path,
+                                              video_theme=Config.video_theme,
+                                              logger_name=Config.logger_name)
 
         self.status = "translated"
 

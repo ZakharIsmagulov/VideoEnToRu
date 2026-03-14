@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.DBException import (
+from app.exceptions.DBException import (
     RefreshNotFound,
     RefreshExpired,
     RefreshInactive,
@@ -66,7 +66,12 @@ async def validate_refresh(
         raise RefreshInactive(f"Refresh token {raw_refresh} is inactive")
     if refresh.revoked_at is not None:
         raise RefreshRevoked(f"Refresh token {raw_refresh} is revoked")
-    if refresh.expires_at <= now:
+
+    expires_at = refresh.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at <= now:
         raise RefreshExpired(f"Refresh token {raw_refresh} is expired")
 
     return refresh

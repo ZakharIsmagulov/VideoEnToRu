@@ -12,7 +12,7 @@ from app.db.refresh_tokens import (
     validate_refresh,
     create_refresh,
 )
-from app.db.DBException import (
+from app.exceptions.DBException import (
     UserNotFound,
     WrongPassword,
     RefreshException,
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenOnly)
-async def register_for_tokens(
+async def register(
         response: Response,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Annotated[AsyncSession, Depends(get_db)],
@@ -64,7 +64,7 @@ async def register_for_tokens(
         secure=settings.is_secure_cookie,
         samesite="lax",
         max_age=settings.refresh_token_expire_days * 60 * 60 * 24,
-        path="/auth",
+        path="/auth/refresh",
     )
 
     return TokenOnly(
@@ -74,7 +74,7 @@ async def register_for_tokens(
 
 
 @router.post("/login", response_model=TokenOnly)
-async def login_for_tokens(
+async def login(
         response: Response,
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         db: Annotated[AsyncSession, Depends(get_db)],
@@ -106,7 +106,7 @@ async def login_for_tokens(
         secure=settings.is_secure_cookie,
         samesite="lax",
         max_age=settings.refresh_token_expire_days * 60 * 60 * 24,
-        path="/auth",
+        path="/auth/refresh",
     )
 
     return TokenOnly(
@@ -118,19 +118,19 @@ async def login_for_tokens(
 @router.post("/refresh", response_model=TokenOnly)
 async def refresh_tokens(
         response: Response,
-        raw_refresh: Annotated[str | None, Cookie()] = None,
+        refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
         db: Annotated[AsyncSession, Depends(get_db)] = None,
 ) -> TokenOnly:
-    if raw_refresh is None:
+    if refresh_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing refresh token",
         )
 
     try:
-        refresh = await validate_refresh(raw_refresh=raw_refresh, db=db)
+        refresh = await validate_refresh(raw_refresh=refresh_token, db=db)
     except RefreshException as e:
-        logger.error(f"/auth/refresh: Refresh token {raw_refresh} failed: {str(e)}")
+        logger.error(f"/auth/refresh: Refresh token {refresh_token} failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -151,7 +151,7 @@ async def refresh_tokens(
     new_access_token = create_access_token(user_id=user.id)
     try:
         new_refresh_token = await rotate_refresh_token(
-            raw_refresh=raw_refresh,
+            raw_refresh=refresh_token,
             user=user,
             db=db,
         )
@@ -166,7 +166,7 @@ async def refresh_tokens(
         secure=settings.is_secure_cookie,
         samesite="lax",
         max_age=settings.refresh_token_expire_days * 60 * 60 * 24,
-        path="/auth",
+        path="/auth/refresh",
     )
 
     return TokenOnly(
@@ -178,7 +178,7 @@ async def refresh_tokens(
 @router.post("/logout", status_code=204)
 async def logout(
         response: Response,
-        refresh_token: Annotated[str | None, Cookie()] = None,
+        refresh_token: Annotated[str | None, Cookie(alias="refresh_token")] = None,
         db: Annotated[AsyncSession, Depends(get_db)] = None,
 ) -> None:
     if refresh_token is None:
@@ -202,5 +202,5 @@ async def logout(
 
     response.delete_cookie(
         key="refresh_token",
-        path="/auth",
+        path="/auth/refresh",
     )

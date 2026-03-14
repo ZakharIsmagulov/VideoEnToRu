@@ -1,5 +1,5 @@
 import logging
-from .TranslationException import PathNotExist, AudioExtractionError
+from app.exceptions.TranslationException import PathNotExist, AudioExtractionError
 from pathlib import Path
 from moviepy import VideoFileClip
 

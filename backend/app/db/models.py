@@ -1,6 +1,6 @@
 from typing import List, Literal
 from datetime import datetime
-from sqlalchemy import ForeignKey, String, Integer, DateTime, func
+from sqlalchemy import ForeignKey, String, Integer, DateTime, func, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,11 +26,14 @@ class VideoInstance(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     name: Mapped[str] = mapped_column(String(100))
+    initial_name: Mapped[str] = mapped_column(String, default=name)
     status: Mapped[Literal["stopped", "in_queue", "in_progress", "done", "error"]] = (
         mapped_column(String, default="stopped"))
     upload_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    job_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
 
     user: Mapped["User"] = relationship(back_populates="videos")
 

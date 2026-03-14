@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 from app.db.models import User
-from app.db.DBException import (
+from app.exceptions.DBException import (
     UserAlreadyExist,
     UserNotFound,
     WrongPassword,
@@ -14,14 +15,12 @@ async def create_user(
         password: str,
         db: AsyncSession,
 ) -> User:
-    stmt = select(User).where(User.login == login)
-    result = await db.execute(stmt)
-    if result.scalar_one_or_none() is not None:
-        raise UserAlreadyExist(f"User with login {login} already exist")
-
     user = User(login=login, pass_hash=hash_pass(password))
     db.add(user)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        raise UserAlreadyExist(f"User with login {login} already exist")
     return user
 
 
@@ -73,7 +72,10 @@ async def update_user_login(
         db: AsyncSession,
 ) -> User:
     user.login = new_login
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        raise UserAlreadyExist(f"User with login {new_login} already exist")
     return user
 
 

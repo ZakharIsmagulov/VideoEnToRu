@@ -1,6 +1,6 @@
 import logging
-from .TranslationModel import TranslationModel
-from .FormattingModel import FormattingModel
+from app.translation.TranslationModel import TranslationModel
+from app.translation.FormattingModel import FormattingModel
 from typing import List, Dict, Any
 from pathlib import Path
 import math
@@ -93,7 +93,7 @@ def translate_segments(segments: List[Dict[str, Any]], model_path: Path,
 
     logger.info(f"Loading translation model {str(model_path)}")
     model = TranslationModel(str(model_path.absolute()), logger_name)
-    logger.info(f"Translation model {str(model_path)} was loaded")
+    logger.info(f"translation model {str(model_path)} was loaded")
 
     logger.info(f"Starting translation of {len(segments)} segments")
     translated_segs = []
@@ -175,7 +175,7 @@ def translate_pipeline(segments: List[Dict], translator_model_path: Path, format
     logger = logging.getLogger(logger_name)
 
     #translated_segments = translate_segments(segments, translator_model_path, logger_name)
-    #Path(r"A:\Progs\PyCharmProjects\VideoEnToRu\backend\app\Translation\temp\translated.json").write_text(
+    #Path(r"A:\Progs\PyCharmProjects\VideoEnToRu\backend\app\translation\temp\translated.json").write_text(
     #    json.dumps(translated_segments, ensure_ascii=False, indent=2))
     with open(r"A:\Progs\PyCharmProjects\VideoEnToRu\backend\app\Translation\temp\translated.json", 'r') as f:
         translated_segments = json.load(f, strict=False)
